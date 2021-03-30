@@ -2,17 +2,17 @@ package main
 
 import (
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/joho/godotenv"
 	"github.com/neverlock/openvidu-exporter/session"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -98,23 +98,35 @@ func NewExporter(viduHost string, viduUsername string, viduPassword string) *Vid
 
 }
 
-func main() {
-
-	err := godotenv.Load()
+func readConfig() {
+	viper.SetConfigName("config") // ชื่อ config file
+	viper.AddConfigPath(".")      // ระบุ path ของ config file
+	viper.AutomaticEnv()          // อ่าน value จาก ENV variable
+	// แปลง _ underscore ใน env เป็น . dot notation ใน viper
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// อ่าน config
+	err := viper.ReadInConfig()
 	if err != nil {
-		log.Errorf("Error loading .env file, assume env variables are set.")
+		panic(fmt.Errorf("fatal error config file: %s \n", err))
 	}
+}
 
-	flag.Parse()
+func main() {
+	readConfig()
 
-	viduHost := os.Getenv("VIDU_HOST")
-	viduUsername := os.Getenv("VIDU_USERNAME")
-	viduPassword := os.Getenv("VIDU_PASSWORD")
-	exporterListen := os.Getenv("LISTEN_HOST") + os.Getenv("LISTEN_PORT")
+	exporterListen := viper.GetString("Vidu.ListenHost") + viper.GetString("Vidu.ListenPort")
 
-	exporter := NewExporter(viduHost, viduUsername, viduPassword)
 	reg := prometheus.NewPedanticRegistry()
-	reg.MustRegister(exporter)
+
+	for i := 1; i <= viper.GetInt("Vidu.MaxSub"); i++ {
+		sub := fmt.Sprintf("Vidu.Vidu%d", i)
+		Vidu := viper.Sub(sub)
+		if Vidu == nil {
+			panic("Vidu config not found")
+		}
+		exporter := NewExporter(Vidu.GetString("URL"), Vidu.GetString("User"), Vidu.GetString("Password"))
+		reg.MustRegister(exporter)
+	}
 
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,

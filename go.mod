@@ -7,4 +7,5 @@ require (
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/prometheus/client_golang v1.10.0 // indirect
 	github.com/prometheus/common v0.20.0 // indirect
+	github.com/spf13/viper v1.7.1 // indirect
 )
