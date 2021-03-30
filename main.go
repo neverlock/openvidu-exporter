@@ -81,9 +81,6 @@ func (v *ViduExporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 func NewExporter(viduHost string, viduUsername string, viduPassword string) *ViduExporter {
-	//test
-	fmt.Println(viduUsername, viduPassword)
-	//endtest
 	return &ViduExporter{
 		Host: viduHost,
 		User: viduUsername,
