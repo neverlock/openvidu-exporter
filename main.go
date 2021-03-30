@@ -25,14 +25,15 @@ var (
 )
 
 type ViduExporter struct {
-	Host               string
-	User               string
-	Pass               string
-	ViduSessionAPIDesc *prometheus.Desc //Session or Connection
+	Host                         string
+	User                         string
+	Pass                         string
+	ViduSessionAPIDesc           *prometheus.Desc //Session or Connection
+	ViduConnectionPerSessionDesc *prometheus.Desc
 }
 
-func (v *ViduExporter) ReallyExpensiveAssessmentOfTheSystemState() (objectByHost map[string]int) {
-	session, connection, err := getSessionNumber(v.Host, v.User, v.Pass)
+func (v *ViduExporter) ReallyExpensiveAssessmentOfTheSystemState() (objectByHost map[string]int, sessionByHost map[string]int) {
+	session, connection, connectionInsession, err := getSessionNumber(v.Host, v.User, v.Pass)
 	if err != nil {
 		return
 	}
@@ -40,42 +41,59 @@ func (v *ViduExporter) ReallyExpensiveAssessmentOfTheSystemState() (objectByHost
 		"session":    session,
 		"connection": connection,
 	}
+	sessionByHost = connectionInsession
 	return
 }
 
-func getSessionNumber(host string, user string, pass string) (int, int, error) {
+func getSessionNumber(host string, user string, pass string) (int, int, map[string]int, error) {
 	req, err := http.NewRequest("GET", host+SESSION_API_ENDPOINT, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 
 	req.SetBasicAuth(user, pass)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
-	return session.GetSessionActive(body), session.GetConnectionActive(body), nil
+	sessionCount := session.GetSessionActive(body)
+
+	//collect connection from each sessionID in to map[sessionID]connection
+	connectionInsession := make(map[string]int)
+	for i := 0; i < sessionCount; i++ {
+		connectionInsession[session.GetSessionID(body, i)] = session.GetConnectionInSession(body, i)
+	}
+	return sessionCount, session.GetConnectionActive(body), connectionInsession, nil
 }
 
 func (v *ViduExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- v.ViduSessionAPIDesc
+	ch <- v.ViduConnectionPerSessionDesc
 }
 
 func (v *ViduExporter) Collect(ch chan<- prometheus.Metric) {
-	objectByHost := v.ReallyExpensiveAssessmentOfTheSystemState()
+	objectByHost, sessionByHost := v.ReallyExpensiveAssessmentOfTheSystemState()
 	for object, scount := range objectByHost {
 		ch <- prometheus.MustNewConstMetric(
 			v.ViduSessionAPIDesc,
 			prometheus.GaugeValue,
 			float64(scount),
 			object,
+		)
+	}
+	for sessionid, ccount := range sessionByHost {
+		ch <- prometheus.MustNewConstMetric(
+			v.ViduConnectionPerSessionDesc,
+			prometheus.GaugeValue,
+			float64(ccount),
+			sessionid,
 		)
 	}
 }
@@ -89,6 +107,12 @@ func NewExporter(viduHost string, viduUsername string, viduPassword string) *Vid
 			"vidu_session_usage",
 			"Number of session use in OpenVidu server",
 			[]string{"object"},
+			prometheus.Labels{"host": viduHost},
+		),
+		ViduConnectionPerSessionDesc: prometheus.NewDesc(
+			"vidu_connection_per_session",
+			"Number of connection in each session in  OpenVidu server",
+			[]string{"sessionID"},
 			prometheus.Labels{"host": viduHost},
 		),
 	}

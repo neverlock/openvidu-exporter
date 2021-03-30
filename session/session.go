@@ -26,3 +26,10 @@ func GetConnectionInSession(js []byte, index int) int {
 	json.Unmarshal(js, &session1)
 	return session1.Content[index].Connections.Numberofelements
 }
+
+func GetSessionID(js []byte, index int) string {
+	var session1 ViduSession
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	json.Unmarshal(js, &session1)
+	return session1.Content[index].Sessionid
+}

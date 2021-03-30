@@ -28,3 +28,11 @@ func TestGetConnectionInSession(t *testing.T) {
 		t.Errorf("Error occured: %d", ret)
 	}
 }
+
+func TestGetSessionID(t *testing.T) {
+	ret := GetSessionID([]byte(testOpenviduJson), 0)
+	fmt.Println("Session ID of Session[0] := ", ret)
+	if ret != 1294 {
+		t.Errorf("Error occured: %s", ret)
+	}
+}
